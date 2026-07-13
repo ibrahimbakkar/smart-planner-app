@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#10b981">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>المنظم الزمني الذكي - النسخة المطورة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <!-- تعمل فقط داخل تطبيق أندرويد الحقيقي (Capacitor)؛ لا تأثير لها في المتصفح العادي -->
+    <script src="capacitor.js"></script>
+    <script src="capacitor-local-notifications.js"></script>
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .glass-card { background: white; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        .tab-active { border-bottom: 3px solid #10b981; color: #10b981; font-weight: bold; }
+        .btn-delete { color: #ef4444; cursor: pointer; padding: 2px 8px; border-radius: 6px; transition: all 0.2s; border: 1px solid transparent; }
+        .btn-delete:hover { background-color: #fee2e2; border-color: #fca5a5; }
+        input, select, textarea { border: 1px solid #cbd5e1; border-radius: 0.5rem; padding: 0.5rem; outline: none; width: 100%; }
+        input:focus, textarea:focus { border-color: #10b981; }
+        .task-item { transition: all 0.2s; border: 1px solid transparent; border-radius: 0.5rem; }
+        .task-item:hover { border-color: #e2e8f0; background-color: #ffffff; }
+        .archive-item:hover { transform: translateY(-2px); transition: transform 0.2s; }
+        .task-delete-btn { opacity: 0; transition: opacity 0.2s; }
+        .task-item:hover .task-delete-btn { opacity: 1; }
+        
+        /* Chat Sidebar styling */
+        #ai-chat-sidebar { transition: transform 0.3s ease-in-out; }
+        .chat-msg { max-width: 88%; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; font-size: 14px; line-height: 1.6; position: relative; }
+        .msg-user { background-color: #10b981; color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg-ai { background-color: #f1f5f9; color: #1e293b; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #e2e8f0; }
+        .msg-ai pre { background: #1e293b; color: #e2e8f0; padding: 8px 10px; border-radius: 8px; overflow-x: auto; direction: ltr; text-align: left; font-size: 12px; margin: 6px 0; }
+        .msg-ai code { background: #e2e8f0; padding: 1px 5px; border-radius: 4px; font-size: 12px; direction: ltr; display: inline-block; }
+        .msg-ai pre code { background: transparent; padding: 0; }
+        .msg-ai ul { list-style: disc; padding-inline-start: 20px; margin: 4px 0; }
+        .msg-copy-btn { opacity: 0; transition: opacity .15s; position: absolute; bottom: -18px; left: 4px; font-size: 10px; color: #94a3b8; cursor: pointer; background: none; border: none; }
+        .chat-msg:hover .msg-copy-btn { opacity: 1; }
+        .conv-item { cursor: pointer; padding: 8px 10px; border-radius: 8px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+        .conv-item:hover { background: #f1f5f9; }
+        .conv-item.active-conv { background: #d1fae5; color: #065f46; font-weight: bold; }
+        .conv-del { opacity: 0; color: #ef4444; font-size: 13px; }
+        .conv-item:hover .conv-del { opacity: 1; }
+        #chat-history-panel { transition: width 0.2s ease-in-out; }
+        .typing-dots span { animation: blinkDot 1.2s infinite; display:inline-block; }
+        .typing-dots span:nth-child(2){animation-delay:.2s} .typing-dots span:nth-child(3){animation-delay:.4s}
+        @keyframes blinkDot { 0%,80%,100%{opacity:.2} 40%{opacity:1} }
+        
+        /* Custom scrollbar for timeline */
+        .timeline-scroll::-webkit-scrollbar { height: 6px; }
+        .timeline-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* Animated Glow Effect for Progress Bars */
+        @keyframes waveGlowGreen {
+            0% { box-shadow: 0 0 5px #10b981; }
+            50% { box-shadow: 0 0 15px #34d399; }
+            100% { box-shadow: 0 0 5px #10b981; }
+        }
+        @keyframes waveGlowRed {
+            0% { box-shadow: 0 0 5px #ef4444; }
+            50% { box-shadow: 0 0 15px #f87171; }
+            100% { box-shadow: 0 0 5px #ef4444; }
+        }
+        @keyframes moveGradient {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .animated-glow-green {
+            background: linear-gradient(90deg, #10b981, #6ee7b7, #10b981, #6ee7b7);
+            background-size: 200% 100%;
+            animation: waveGlowGreen 2s infinite, moveGradient 3s linear infinite;
+        }
+        .animated-glow-red {
+            background: linear-gradient(90deg, #ef4444, #fca5a5, #ef4444, #fca5a5);
+            background-size: 200% 100%;
+            animation: waveGlowRed 2s infinite, moveGradient 3s linear infinite;
+        }
+
+        /* تأثير التوهج الملون لليوم الحالي (النشط) */
+        @keyframes rgbWaveGlow {
+            0% { box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.6); border-color: rgba(16, 185, 129, 0.8); } /* أخضر */
+            33% { box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.6); border-color: rgba(239, 68, 68, 0.8); } /* أحمر */
+            66% { box-shadow: 0 0 12px 2px rgba(59, 130, 246, 0.6); border-color: rgba(59, 130, 246, 0.8); } /* أزرق */
+            100% { box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.6); border-color: rgba(16, 185, 129, 0.8); } /* أخضر */
+        }
+        .active-day-glow {
+            animation: rgbWaveGlow 3s infinite alternate ease-in-out;
+            transform: translateY(-2px);
+            z-index: 10;
+        }
+
+        /* --- تحسينات الحركة العامة (Micro-interactions) --- */
+        button { transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease, opacity 0.15s ease; }
+        button:active { transform: scale(0.94); }
+        .glass-card { transition: box-shadow 0.25s ease, transform 0.25s ease; }
+        .task-item { position: relative; }
+        .task-item:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+        @keyframes popCheck {
+            0% { transform: scale(1); }
+            40% { transform: scale(1.35); }
+            100% { transform: scale(1); }
+        }
+        .task-complete-pop { animation: popCheck 0.35s ease; }
+
+        @keyframes fadeScaleIn {
+            from { opacity: 0; transform: scale(0.96) translateY(6px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        #modal .glass-card, #modal > div > div { animation: fadeScaleIn 0.2s ease; }
+
+        /* قائمة الثلاث نقاط لكل مهمة */
+        .task-menu-btn { opacity: 0; transition: opacity 0.15s ease, background-color 0.15s ease; color: #94a3b8; border-radius: 4px; padding: 0 3px; line-height: 1; }
+        .task-item:hover .task-menu-btn { opacity: 1; }
+        .task-menu-btn:hover { background-color: #e2e8f0; color: #475569; }
+        #task-dropdown-menu {
+            position: fixed; z-index: 200; background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.12); overflow: hidden; min-width: 170px; animation: fadeScaleIn 0.15s ease;
+            transform-origin: top left;
+        }
+        #task-dropdown-menu button { width: 100%; text-align: right; padding: 9px 12px; font-size: 12px; background: white; color: #334155; display: flex; align-items: center; gap: 6px; }
+        #task-dropdown-menu button:hover { background: #f1f5f9; }
+        #task-dropdown-menu button:active { transform: none; }
+
+        /* شارة نبضة للمنبه المفعّل */
+        @keyframes alarmPulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: 0.55; transform: scale(1.15);} }
+        .alarm-badge { animation: alarmPulse 1.6s infinite ease-in-out; display: inline-block; }
+
+        /* بانر التنبيه المنبثق أعلى الشاشة */
+        @keyframes slideDownBanner { from { transform: translate(-50%, -120%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        #alarm-banner {
+            position: fixed; top: 16px; left: 50%; z-index: 300; min-width: 300px; max-width: 92vw;
+            background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 14px;
+            box-shadow: 0 15px 35px rgba(5,150,105,0.4); padding: 16px 18px; animation: slideDownBanner 0.4s cubic-bezier(.2,1.4,.4,1);
+        }
+        #alarm-banner button { transition: transform 0.12s ease, background-color 0.15s; }
+
+        /* تأثير هوفر ناعم لعناصر القوائم العامة */
+        select, input, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+        select:hover, input:hover, textarea:hover { border-color: #94a3b8; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div id="alarm-banner-container"></div>
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
+                    المنظم الزمني الذكي <span class="text-emerald-600 text-sm" id="year-indicator"></span>
+                </h1>
+                <div class="flex items-center gap-4 mt-2">
+                    <select id="select-year" onchange="changeTimeContext()" class="bg-slate-50 text-sm font-bold w-32"></select>
+                    <select id="select-month" onchange="changeTimeContext()" class="bg-slate-50 text-sm font-bold w-32">
+                        <option value="0">يناير (1)</option><option value="1">فبراير (2)</option><option value="2">مارس (3)</option>
+                        <option value="3">أبريل (4)</option><option value="4">مايو (5)</option><option value="5">يونيو (6)</option>
+                        <option value="6">يوليو (7)</option><option value="7">أغسطس (8)</option><option value="8">سبتمبر (9)</option>
+                        <option value="9">أكتوبر (10)</option><option value="10">نوفمبر (11)</option><option value="11">ديسمبر (12)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-3 items-center">
+                <div class="text-xs text-slate-400 text-left mr-4 hidden sm:block">
+                    <p>الحالة: <span class="text-emerald-500 font-bold">متصل ✅</span></p>
+                    <p id="automation-status">الأرشفة التلقائية نشطة</p>
+                </div>
+                <!-- Cloud Sync Configuration Button -->
+                <button onclick="setSyncConfig()" id="sync-status-btn" class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-200 shadow-sm border border-slate-200 flex items-center transition" title="إعداد المزامنة السحابية">
+                    ☁️ مزامنة
+                </button>
+                <!-- API Key Configuration Button -->
+                <button onclick="setApiKey()" class="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg hover:bg-slate-200 shadow-sm border border-slate-200 flex items-center transition" title="إعداد مفتاح API">
+                    🔑 API
+                </button>
+                <button onclick="toggleChat()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 shadow-md flex items-center gap-2 transition">
+                    <span>تحليل الأداء (مساعد AI)</span> ✨
+                </button>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <nav class="flex border-b border-slate-200 mb-8 bg-white rounded-t-xl px-4 overflow-x-auto">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-6 py-4 tab-active whitespace-nowrap">الرؤية الشاملة</button>
+            <button onclick="switchTab('hierarchy')" id="tab-hierarchy" class="tab-btn px-6 py-4 whitespace-nowrap">المخطط الزمني</button>
+            <button onclick="switchTab('habits')" id="tab-habits" class="tab-btn px-6 py-4 whitespace-nowrap">متتبع العادات</button>
+            <button onclick="switchTab('archive')" id="tab-archive" class="tab-btn px-6 py-4 whitespace-nowrap">الأرشيف</button>
+        </nav>
+
+        <!-- Tab Content -->
+        <section id="content-dashboard" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+                <!-- الوقت والتاريخ الحالي -->
+                <div class="glass-card p-5 border-t-4 border-slate-800 bg-slate-50">
+                    <h4 class="text-slate-500 text-[10px] mb-2 font-bold uppercase">الوقت والتاريخ</h4>
+                    <div id="current-time-display" class="text-xl font-bold text-slate-800 leading-tight">--:-- --</div>
+                    <div id="current-date-display" class="text-[10px] text-slate-500 mt-1 font-medium">-- --- ----</div>
+                </div>
+                <!-- الأسبوع الحالي -->
+                <div class="glass-card p-4 border-t-4 border-cyan-500 col-span-1 md:col-span-1 lg:col-span-1">
+                    <h4 class="text-slate-500 text-[10px] mb-3 font-bold uppercase">إنجاز الأسبوع</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-emerald-600">إنجاز المهام</span>
+                                <span class="text-xs font-bold text-emerald-600" id="prog-week-green-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-week-green-bar" class="h-full transition-all duration-500 animated-glow-green" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-red-500">وقت مهدر / ضائع</span>
+                                <span class="text-xs font-bold text-red-500" id="prog-week-red-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-week-red-bar" class="h-full transition-all duration-500 animated-glow-red" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- الشهر الحالي -->
+                <div class="glass-card p-4 border-t-4 border-emerald-500 col-span-1 md:col-span-1 lg:col-span-1">
+                    <h4 class="text-slate-500 text-[10px] mb-3 font-bold uppercase">إنجاز الشهر</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-emerald-600">إنجاز المهام</span>
+                                <span class="text-xs font-bold text-emerald-600" id="prog-month-green-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-month-green-bar" class="h-full transition-all duration-500 animated-glow-green" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-red-500">وقت مهدر / ضائع</span>
+                                <span class="text-xs font-bold text-red-500" id="prog-month-red-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-month-red-bar" class="h-full transition-all duration-500 animated-glow-red" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- السنة التراكمي -->
+                <div class="glass-card p-4 border-t-4 border-orange-500 col-span-1 md:col-span-1 lg:col-span-1">
+                    <h4 class="text-slate-500 text-[10px] mb-3 font-bold uppercase">إنجاز السنة</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-emerald-600">إنجاز المهام</span>
+                                <span class="text-xs font-bold text-emerald-600" id="prog-year-green-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-year-green-bar" class="h-full transition-all duration-500 animated-glow-green" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between items-end mb-1">
+                                <span class="text-[11px] font-bold text-red-500">وقت مهدر / ضائع</span>
+                                <span class="text-xs font-bold text-red-500" id="prog-year-red-text">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prog-year-red-bar" class="h-full transition-all duration-500 animated-glow-red" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- التزام العادات -->
+                <div class="glass-card p-5 border-t-4 border-purple-500">
+                    <h4 class="text-slate-500 text-[10px] mb-2 font-bold uppercase">إلتزام العادات</h4>
+                    <span class="text-2xl font-bold text-purple-600" id="prog-habits-text">0%</span>
+                    <p class="text-[9px] text-slate-400 mt-2">خلال الشهر الحالي</p>
+                </div>
+                <!-- تاريخ الأرشفة القادم -->
+                <div class="glass-card p-5 border-t-4 border-blue-500">
+                    <h4 class="text-slate-500 text-[10px] mb-2 font-bold uppercase">الأرشفة القادمة</h4>
+                    <span class="text-xl font-bold text-blue-600" id="next-archive-date">--/--</span>
+                    <p class="text-[9px] text-slate-400 mt-2">تلقائياً نهاية الشهر</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="content-hierarchy" class="tab-content hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold">المخطط الزمني للمهام</h3>
+                <button onclick="addGoal()" class="bg-emerald-600 text-white px-6 py-2 rounded-xl shadow-lg hover:bg-emerald-700 transition">+ إضافة مشروع للشهر المحدد</button>
+            </div>
+            <div id="hierarchy-tree" class="space-y-8"></div>
+        </section>
+
+        <section id="content-habits" class="tab-content hidden">
+            <div class="glass-card p-6 overflow-x-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold">متتبع العادات</h3>
+                    <button onclick="addHabit()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">+ عادة جديدة</button>
+                </div>
+                <table class="w-full text-[10px] text-center border-collapse">
+                    <thead><tr class="bg-slate-50">
+                        <th class="p-3 border sticky right-0 bg-slate-50 z-10 min-w-[120px]">العادة</th>
+                        <script>for(let i=1; i<=31; i++) document.write(`<th class="p-1 border">${i}</th>`);</script>
+                        <th class="p-3 border">حذف</th>
+                    </tr></thead>
+                    <tbody id="habits-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="content-archive" class="tab-content hidden">
+            <div id="archive-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </section>
+    </div>
+
+    <!-- AI Chat Sidebar -->
+    <div id="ai-chat-sidebar" class="fixed inset-y-0 left-0 w-full sm:w-[560px] bg-white shadow-2xl transform -translate-x-full z-50 flex border-r border-slate-200">
+        <!-- Conversations history panel -->
+        <div id="chat-history-panel" class="w-36 sm:w-44 bg-slate-900 text-slate-200 flex flex-col shrink-0">
+            <button onclick="newConversation()" class="m-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1">+ محادثة جديدة</button>
+            <div id="conversation-list" class="flex-1 overflow-y-auto px-2 space-y-1 pb-2"></div>
+        </div>
+
+        <!-- Main chat panel -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <div class="p-3 bg-slate-800 text-white flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold flex items-center gap-2 text-sm">✨ المساعد الزمني الذكي</h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="setApiKey()" class="text-slate-300 hover:text-white text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded" title="إعداد مفاتيح API">🔑</button>
+                        <button onclick="toggleChat()" class="text-slate-300 hover:text-white text-xl leading-none">&times;</button>
+                    </div>
+                </div>
+                <select id="provider-select" onchange="onProviderChange()" class="w-full bg-slate-700 text-white text-xs border-none rounded-lg py-1.5">
+                    <option value="gemini">Google Gemini (gemini-flash-latest)</option>
+                    <option value="openai">OpenAI (gpt-4o-mini)</option>
+                    <option value="anthropic">Anthropic Claude (claude-sonnet-4-6)</option>
+                </select>
+            </div>
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col bg-slate-50"></div>
+            <div class="p-3 bg-white border-t border-slate-200">
+                <div class="flex gap-2">
+                    <input type="text" id="chat-input" placeholder="اكتب سؤالك هنا..." class="flex-1 border-slate-300" onkeypress="if(event.key === 'Enter') sendChatMessage()">
+                    <button onclick="sendChatMessage()" id="chat-send-btn" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700">إرسال</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal -->
+    <div id="modal" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-white p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <h3 id="modal-title" class="text-xl font-bold mb-6 text-slate-800"></h3>
+            <div id="modal-fields" class="space-y-4"></div>
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="closeModal()" class="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-lg">إلغاء</button>
+                <button id="modal-save" class="px-8 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Core State ---
+        let state = JSON.parse(localStorage.getItem('productivity_auto_v12')) || { 
+            goals: [], 
+            habits: [],
+            archive: [],
+            lastMonthSaved: new Date().getMonth(),
+            lastYearSaved: new Date().getFullYear()
+        };
+
+        const now = new Date();
+        const realYear = now.getFullYear();
+        const realMonth = now.getMonth();
+        let currentYear = realYear;
+        let currentMonth = realMonth;
+        
+        let clipboardTasks = []; // لحفظ المهام المنسوخة
+        let currentModalCallback = null;
+
+        window.onload = () => {
+            checkAndArchive();
+            initUI();
+            renderHierarchy();
+            renderHabits();
+            renderArchive();
+            updateDashboard();
+            initChat();
+            initSync();
+            rescheduleAllNativeAlarms();
+            
+            setInterval(updateClock, 1000);
+            updateClock();
+
+            // تسجيل Service Worker لتفعيل تجربة PWA (يعمل فقط عند الاستضافة على https أو localhost)
+            if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+                navigator.serviceWorker.register('service-worker.js').catch(() => {});
+            }
+        };
+
+        function updateClock() {
+            const d = new Date();
+            const timeStr = d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const dateStr = d.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('current-time-display').innerText = timeStr;
+            document.getElementById('current-date-display').innerText = dateStr;
+        }
+
+        // --- Custom Modal Management ---
+        function showModal(title, htmlFields, callback, saveBtnText = 'حفظ') {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-fields').innerHTML = htmlFields;
+            const saveBtn = document.getElementById('modal-save');
+            saveBtn.innerText = saveBtnText;
+            document.getElementById('modal').classList.remove('hidden');
+            currentModalCallback = callback;
+            saveBtn.onclick = () => {
+                if(currentModalCallback) currentModalCallback();
+            };
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            currentModalCallback = null;
+        }
+
+        function alertModal(title, message) {
+            showModal(title, `<p class="text-slate-600">${message}</p>`, closeModal, 'حسناً');
+        }
+
+        // --- Tabs Management ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-active'));
+            document.getElementById(`tab-${tabId}`).classList.add('tab-active');
+        }
+
+        // --- AI Chat Management (multi-provider + multi-conversation) ---
+        const PROVIDERS = {
+            gemini:    { label: 'Google Gemini', model: 'gemini-flash-latest', keyName: 'api_key_gemini', keyPlaceholder: 'AIzaSy...' },
+            openai:    { label: 'OpenAI', model: 'gpt-4o-mini', keyName: 'api_key_openai', keyPlaceholder: 'sk-...' },
+            anthropic: { label: 'Anthropic Claude', model: 'claude-sonnet-4-6', keyName: 'api_key_anthropic', keyPlaceholder: 'sk-ant-...' }
+        };
+        const CHAT_STATE_KEY = 'ai_chat_state_v1';
+        const WELCOME_MSG = 'أهلاً بك! أنا مساعدك الذكي. يمكنني تحليل مهامك، تقديم نصائح لزيادة إنتاجيتك، أو مساعدتك في تنظيم وقتك بشكل أفضل. تأكد أولاً من إضافة مفتاح API الخاص بك لكي أتمكن من الرد (زر 🔑). كيف يمكنني مساعدتك اليوم؟';
+
+        let chatState = loadChatState();
+
+        function loadChatState() {
+            try {
+                const raw = localStorage.getItem(CHAT_STATE_KEY);
+                if(raw) return JSON.parse(raw);
+            } catch(e) {}
+            const firstConv = { id: 'c_' + Date.now(), title: 'محادثة جديدة', providerId: 'gemini', messages: [] };
+            return { activeConversationId: firstConv.id, conversations: [firstConv] };
+        }
+
+        function saveChatState() {
+            localStorage.setItem(CHAT_STATE_KEY, JSON.stringify(chatState));
+        }
+
+        function getActiveConversation() {
+            let conv = chatState.conversations.find(c => c.id === chatState.activeConversationId);
+            if(!conv) { conv = chatState.conversations[0]; chatState.activeConversationId = conv ? conv.id : null; }
+            return conv;
+        }
+
+        function initChat() {
+            if(chatState.conversations.length === 0) {
+                const c = { id: 'c_' + Date.now(), title: 'محادثة جديدة', providerId: 'gemini', messages: [] };
+                chatState.conversations.push(c);
+                chatState.activeConversationId = c.id;
+            }
+            renderConversationList();
+            renderMessages();
+            const conv = getActiveConversation();
+            if(conv) document.getElementById('provider-select').value = conv.providerId || 'gemini';
+        }
+
+        function toggleChat() {
+            const sidebar = document.getElementById('ai-chat-sidebar');
+            sidebar.classList.toggle('-translate-x-full');
+            initChat();
+        }
+
+        function newConversation() {
+            const providerId = document.getElementById('provider-select').value;
+            const c = { id: 'c_' + Date.now(), title: 'محادثة جديدة', providerId, messages: [] };
+            chatState.conversations.unshift(c);
+            chatState.activeConversationId = c.id;
+            saveChatState();
+            renderConversationList();
+            renderMessages();
+        }
+
+        function switchConversation(id) {
+            chatState.activeConversationId = id;
+            saveChatState();
+            renderConversationList();
+            renderMessages();
+            const conv = getActiveConversation();
+            document.getElementById('provider-select').value = conv.providerId || 'gemini';
+        }
+
+        function deleteConversation(id, evt) {
+            if(evt) evt.stopPropagation();
+            chatState.conversations = chatState.conversations.filter(c => c.id !== id);
+            if(chatState.activeConversationId === id) {
+                if(chatState.conversations.length === 0) {
+                    const c = { id: 'c_' + Date.now(), title: 'محادثة جديدة', providerId: 'gemini', messages: [] };
+                    chatState.conversations.push(c);
+                }
+                chatState.activeConversationId = chatState.conversations[0].id;
+            }
+            saveChatState();
+            renderConversationList();
+            renderMessages();
+        }
+
+        function onProviderChange() {
+            const conv = getActiveConversation();
+            if(!conv) return;
+            conv.providerId = document.getElementById('provider-select').value;
+            saveChatState();
+        }
+
+        function renderConversationList() {
+            const list = document.getElementById('conversation-list');
+            list.innerHTML = chatState.conversations.map(c => `
+                <div class="conv-item ${c.id === chatState.activeConversationId ? 'active-conv' : ''}" onclick="switchConversation('${c.id}')">
+                    <span class="truncate">${c.title}</span>
+                    <span class="conv-del" onclick="deleteConversation('${c.id}', event)" title="حذف">×</span>
+                </div>
+            `).join('');
+        }
+
+        // تحويل ماركداون بسيط إلى HTML (عريض، أكواد، قوائم، أسطر)
+        function renderMarkdown(text) {
+            let escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            escaped = escaped.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${code.trim()}</code></pre>`);
+            escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+            escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            escaped = escaped.replace(/(^|\n)[-*]\s+(.+)/g, '$1<li>$2</li>');
+            escaped = escaped.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            escaped = escaped.replace(/\n/g, '<br>');
+            return escaped;
+        }
+
+        function appendMessageBubble(role, content, container) {
+            const div = document.createElement('div');
+            div.className = 'chat-msg ' + (role === 'user' ? 'msg-user' : 'msg-ai');
+            if(role === 'user') {
+                div.textContent = content;
+            } else {
+                div.innerHTML = renderMarkdown(content) + `<button class="msg-copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.dataset.raw)">نسخ 📋</button>`;
+                div.dataset.raw = content;
+            }
+            container.appendChild(div);
+            return div;
+        }
+
+        function renderMessages() {
+            const chatBox = document.getElementById('chat-messages');
+            chatBox.innerHTML = '';
+            const conv = getActiveConversation();
+            if(!conv || conv.messages.length === 0) {
+                appendMessageBubble('assistant', WELCOME_MSG, chatBox);
+            } else {
+                conv.messages.forEach(m => appendMessageBubble(m.role === 'user' ? 'user' : 'assistant', m.content, chatBox));
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // بناء تقرير كامل بكل مهام الشهر المعروض حاليًا (عنوان، وقت، حالة الإنجاز)
+        function buildCurrentMonthTasksReport() {
+            const monthGoals = state.goals.filter(g => g.year === currentYear && g.month === currentMonth);
+            if(monthGoals.length === 0) return 'لا توجد مشاريع أو مهام مضافة لهذا الشهر بعد.';
+            let lines = [];
+            monthGoals.forEach(goal => {
+                lines.push(`\n### مشروع: ${goal.title}`);
+                goal.weeks.forEach(week => {
+                    week.days.forEach(day => {
+                        if(day.tasks.length === 0) return;
+                        lines.push(`- يوم ${day.dateNum} (${day.name}):`);
+                        day.tasks.forEach(t => {
+                            lines.push(`  • [${t.done ? 'منجزة ✅' : 'غير منجزة ❌'}]${t.time ? ' الساعة ' + t.time : ''} — ${t.title}`);
+                        });
+                    });
+                });
+            });
+            return lines.join('\n');
+        }
+
+        // إحصائيات مجمّعة عبر كل الشهور المسجلة (بدون تفاصيل كل مهمة لتقليل الحجم)
+        function buildAllMonthsStats() {
+            let totalTasks = 0, doneTasks = 0;
+            const perGoal = state.goals.map(g => {
+                let t = 0, d = 0;
+                g.weeks.forEach(w => w.days.forEach(day => day.tasks.forEach(task => { t++; if(task.done) d++; })));
+                totalTasks += t; doneTasks += d;
+                return `- ${g.title} (${g.year}/${g.month + 1}): ${t} مهمة، أُنجز منها ${d} (${t ? Math.round(d / t * 100) : 0}%)`;
+            });
+            return `إجمالي المهام في كل السجل: ${totalTasks}، المنجز منها: ${doneTasks} (${totalTasks ? Math.round(doneTasks / totalTasks * 100) : 0}%).\nتفصيل حسب المشروع:\n${perGoal.join('\n') || 'لا يوجد'}`;
+        }
+
+        // تقرير كامل عن العادات: كل عادة وعدد الأيام المنجزة هذا الشهر من إجمالي أيام الشهر حتى الآن
+        function buildHabitsReport() {
+            if(state.habits.length === 0) return 'لا توجد عادات مضافة.';
+            const todayNum = (currentYear === realYear && currentMonth === realMonth) ? now.getDate() : new Date(currentYear, currentMonth + 1, 0).getDate();
+            return state.habits.map(h => {
+                const doneSoFar = h.days.filter(d => d <= todayNum).length;
+                const doneDaysList = h.days.slice().sort((a,b)=>a-b).join('، ') || 'لا يوجد';
+                return `- ${h.name}: أُنجزت ${doneSoFar} من ${todayNum} يومًا حتى الآن (الأيام: ${doneDaysList})`;
+            }).join('\n');
+        }
+
+        function buildArchiveReport() {
+            if(state.archive.length === 0) return 'لا يوجد أرشيف بعد.';
+            return state.archive.slice(0, 12).map(a => `- ${a.label}: نسبة إنجاز ${a.score}%`).join('\n');
+        }
+
+        function buildSystemContext() {
+            return `أنت مساعد الذكاء الاصطناعي الخاص بتطبيق "المنظم الزمني الذكي"، ولك صلاحية كاملة للاطلاع على كل بيانات المستخدم الحقيقية أدناه — استخدمها لتقديم نصائح دقيقة ومباشرة بدون أي مجاملة أو كلام عام. إذا رأيت تقصيرًا أو تكدسًا أو سوء تنظيم، قله بصراحة واقترح حلاً عمليًا.
+
+=== السياق الزمني ===
+التاريخ الحالي الفعلي: ${now.getFullYear()}/${realMonth + 1}/${now.getDate()}
+الشهر المعروض في الشاشة الآن: ${currentYear}/${currentMonth + 1}
+
+=== كل مهام الشهر المعروض حاليًا (بالتفصيل) ===
+${buildCurrentMonthTasksReport()}
+
+=== إحصائيات كل المشاريع عبر كل الشهور المسجلة ===
+${buildAllMonthsStats()}
+
+=== العادات اليومية وتتبعها هذا الشهر ===
+${buildHabitsReport()}
+
+=== آخر السجلات المؤرشفة (شهور/سنوات سابقة) ===
+${buildArchiveReport()}
+
+تعليمات الرد: أجب باللغة العربية بأسلوب صريح وعملي ومباشر (بدون مجاملات زائدة)، استند فعليًا للأرقام والمهام المذكورة أعلاه بدل الكلام العام، وقدم خطوات قابلة للتنفيذ فورًا. يمكنك استخدام تنسيق ماركداون بسيط (عناوين بخط عريض **، قوائم بشرطة -) عند الحاجة، وكن مختصرًا قدر الإمكان دون فقدان الدقة.`;
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if(!text) return;
+
+            const conv = getActiveConversation();
+            const providerId = conv.providerId || document.getElementById('provider-select').value;
+            const provider = PROVIDERS[providerId];
+            const apiKey = localStorage.getItem(provider.keyName);
+            if(!apiKey) {
+                alertModal('مفتاح API مفقود', `الرجاء إعداد مفتاح API الخاص بـ ${provider.label} أولاً بالضغط على زر 🔑 في الأعلى.`);
+                return;
+            }
+
+            const chatBox = document.getElementById('chat-messages');
+            appendMessageBubble('user', text, chatBox);
+            conv.messages.push({ role: 'user', content: text });
+            if(conv.title === 'محادثة جديدة') conv.title = text.slice(0, 28) + (text.length > 28 ? '…' : '');
+            input.value = '';
+            saveChatState();
+            renderConversationList();
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const indicatorId = 'typing-' + Date.now();
+            const indicator = document.createElement('div');
+            indicator.className = 'chat-msg msg-ai';
+            indicator.id = indicatorId;
+            indicator.innerHTML = '<span class="typing-dots">جاري التفكير<span>.</span><span>.</span><span>.</span></span>';
+            chatBox.appendChild(indicator);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            document.getElementById('chat-send-btn').disabled = true;
+
+            try {
+                const systemContext = buildSystemContext();
+                const history = conv.messages.slice(0, -1); // كل الرسائل السابقة بدون آخر رسالة (سيتم إرسالها ضمن الطلب أدناه)
+                let aiText;
+                if(providerId === 'gemini') {
+                    aiText = await callGemini(apiKey, provider.model, systemContext, conv.messages);
+                } else if(providerId === 'openai') {
+                    aiText = await callOpenAI(apiKey, provider.model, systemContext, conv.messages);
+                } else if(providerId === 'anthropic') {
+                    aiText = await callAnthropic(apiKey, provider.model, systemContext, conv.messages);
+                }
+
+                document.getElementById(indicatorId)?.remove();
+                appendMessageBubble('assistant', aiText, chatBox);
+                conv.messages.push({ role: 'assistant', content: aiText });
+                saveChatState();
+            } catch(e) {
+                document.getElementById(indicatorId)?.remove();
+                const errDiv = document.createElement('div');
+                errDiv.className = 'chat-msg msg-ai text-red-500';
+                errDiv.textContent = 'حدث خطأ: ' + (e.message || 'تعذر الاتصال. تأكد من صحة مفتاح API وتوافر الإنترنت.');
+                chatBox.appendChild(errDiv);
+            }
+            document.getElementById('chat-send-btn').disabled = false;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // --- Provider-specific API calls ---
+        async function callGemini(apiKey, model, systemContext, messages) {
+            const contents = messages.map(m => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }]
+            }));
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: systemContext }] } })
+            });
+            const data = await response.json();
+            if(data.error) throw new Error(data.error.message);
+            return data.candidates?.[0]?.content?.parts?.[0]?.text || 'لم يصل رد من النموذج.';
+        }
+
+        async function callOpenAI(apiKey, model, systemContext, messages) {
+            const chatMessages = [{ role: 'system', content: systemContext }, ...messages.map(m => ({ role: m.role, content: m.content }))];
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model, messages: chatMessages })
+            });
+            const data = await response.json();
+            if(data.error) throw new Error(data.error.message);
+            return data.choices?.[0]?.message?.content || 'لم يصل رد من النموذج.';
+        }
+
+        async function callAnthropic(apiKey, model, systemContext, messages) {
+            const chatMessages = messages.map(m => ({ role: m.role, content: m.content }));
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({ model, max_tokens: 1024, system: systemContext, messages: chatMessages })
+            });
+            const data = await response.json();
+            if(data.error) throw new Error(data.error.message);
+            return data.content?.[0]?.text || 'لم يصل رد من النموذج.';
+        }
+
+        // --- API Key Management (per provider) ---
+        function setApiKey() {
+            const fieldsHtml = Object.entries(PROVIDERS).map(([id, p]) => `
+                <div class="mb-3">
+                    <label class="block text-xs font-bold mb-1 text-slate-600">${p.label}</label>
+                    <input type="text" id="api-key-input-${id}" class="w-full font-mono text-sm" value="${localStorage.getItem(p.keyName) || ''}" placeholder="${p.keyPlaceholder}">
+                </div>
+            `).join('');
+            showModal('إعداد مفاتيح API', `
+                <p class="text-xs text-slate-500 mb-3 leading-relaxed">أدخل مفتاح واحد أو أكثر. تُحفظ المفاتيح محلياً في متصفحك فقط ولا تُرسل لأي جهة سوى مزود النموذج المختار مباشرة.</p>
+                ${fieldsHtml}
+            `, () => {
+                Object.entries(PROVIDERS).forEach(([id, p]) => {
+                    const val = document.getElementById(`api-key-input-${id}`).value.trim();
+                    if(val) localStorage.setItem(p.keyName, val);
+                    else localStorage.removeItem(p.keyName);
+                });
+                closeModal();
+                alertModal('تم بنجاح', 'تم حفظ مفاتيح API. يمكنك الآن الاستفادة من المساعد الذكي!');
+            });
+        }
+
+        // --- Automated Archiving Logic ---
+        function checkAndArchive() {
+            let changed = false;
+            if (state.lastYearSaved !== realYear) {
+                const yearToArchive = state.lastYearSaved;
+                const score = calculateAdvancedProgress('year', yearToArchive, 11).greenPerc;
+                const yearlyGoals = state.goals.filter(g => g.year === yearToArchive);
+                if (yearlyGoals.length > 0) {
+                    state.archive.push({ label: `أرشيف سنة ${yearToArchive}`, year: yearToArchive, score, data: JSON.parse(JSON.stringify(yearlyGoals)), timestamp: new Date().toISOString() });
+                }
+                state.goals = state.goals.filter(g => g.year === realYear);
+                state.lastYearSaved = realYear;
+                state.lastMonthSaved = realMonth;
+                changed = true;
+            }
+            if (state.lastMonthSaved !== realMonth && state.lastYearSaved === realYear) {
+                const monthToArchive = state.lastMonthSaved;
+                const monthGoals = state.goals.filter(g => g.year === realYear && g.month === monthToArchive);
+                if (monthGoals.length > 0) {
+                    const score = calculateAdvancedProgress('month', realYear, monthToArchive).greenPerc;
+                    state.archive.push({ label: `أرشيف شهر ${monthToArchive + 1} - ${realYear}`, year: realYear, month: monthToArchive, score, data: JSON.parse(JSON.stringify(monthGoals)), timestamp: new Date().toISOString() });
+                }
+                state.habits.forEach(h => h.days = []);
+                state.lastMonthSaved = realMonth;
+                changed = true;
+            }
+            if (changed) save();
+        }
+
+        function initUI() {
+            const ySel = document.getElementById('select-year');
+            for(let i=realYear-2; i<=realYear+2; i++){
+                const opt = document.createElement('option');
+                opt.value = i; opt.innerText = i;
+                if(i === realYear) opt.selected = true;
+                ySel.appendChild(opt);
+            }
+            document.getElementById('select-month').value = realMonth;
+            document.getElementById('year-indicator').innerText = realYear;
+            
+            const nextMonthDate = new Date(realYear, realMonth + 1, 1);
+            document.getElementById('next-archive-date').innerText = nextMonthDate.toLocaleDateString('ar-EG', {month:'short', day:'numeric'});
+        }
+
+        function save() {
+            localStorage.setItem('productivity_auto_v12', JSON.stringify(state));
+            updateDashboard();
+            pushStateToCloud();
+        }
+
+        // --- Cloud Sync (Firebase Firestore) ---
+        // فكرة العمل: تُنشئ مشروع Firebase مجاني (خطوات في ملف التعليمات المرفق)،
+        // تلصق بيانات الإعداد (Config) هنا مرة واحدة على كل جهاز، وتختار "كود مزامنة" (نفس الكود بالظبط على الجهازين).
+        // أي تعديل يُحفظ في السحابة فورًا، وأي جهاز تاني بنفس الكود يستقبل التحديث لحظيًا.
+        let syncApp = null, syncDb = null, syncUnsubscribe = null, syncPushTimer = null, isApplyingRemoteUpdate = false;
+
+        function getSyncConfig() {
+            try { return JSON.parse(localStorage.getItem('sync_config_v1') || 'null'); } catch(e) { return null; }
+        }
+
+        function updateSyncStatusBtn(status) {
+            const btn = document.getElementById('sync-status-btn');
+            if(!btn) return;
+            if(status === 'on') btn.innerHTML = '☁️✅ متزامن';
+            else if(status === 'error') btn.innerHTML = '☁️⚠️ خطأ مزامنة';
+            else btn.innerHTML = '☁️ مزامنة';
+        }
+
+        function initSync() {
+            const cfg = getSyncConfig();
+            if(!cfg || !cfg.firebaseConfig || !cfg.syncCode) { updateSyncStatusBtn('off'); return; }
+            try {
+                syncApp = firebase.initializeApp(cfg.firebaseConfig);
+                syncDb = firebase.firestore();
+                const docRef = syncDb.collection('smart_planner_sync').doc(cfg.syncCode);
+                if(syncUnsubscribe) syncUnsubscribe();
+                syncUnsubscribe = docRef.onSnapshot(snap => {
+                    updateSyncStatusBtn('on');
+                    if(!snap.exists) return;
+                    const remote = snap.data();
+                    if(!remote || !remote.state) return;
+                    // تجنّب حلقة تحديث لا نهائية عند استقبال نفس التحديث اللي بعتناه إحنا
+                    if(remote.updatedBy === deviceId) return;
+                    isApplyingRemoteUpdate = true;
+                    state = remote.state;
+                    localStorage.setItem('productivity_auto_v12', JSON.stringify(state));
+                    renderHierarchy();
+                    renderHabits();
+                    renderArchive();
+                    updateDashboard();
+                    isApplyingRemoteUpdate = false;
+                }, err => { console.error(err); updateSyncStatusBtn('error'); });
+            } catch(e) {
+                console.error(e);
+                updateSyncStatusBtn('error');
+            }
+        }
+
+        const deviceId = localStorage.getItem('device_id_v1') || (() => {
+            const id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+            localStorage.setItem('device_id_v1', id);
+            return id;
+        })();
+
+        function pushStateToCloud() {
+            if(isApplyingRemoteUpdate) return;
+            const cfg = getSyncConfig();
+            if(!cfg || !syncDb) return;
+            clearTimeout(syncPushTimer);
+            syncPushTimer = setTimeout(() => {
+                syncDb.collection('smart_planner_sync').doc(cfg.syncCode)
+                    .set({ state, updatedBy: deviceId, updatedAt: Date.now() })
+                    .then(() => updateSyncStatusBtn('on'))
+                    .catch(err => { console.error(err); updateSyncStatusBtn('error'); });
+            }, 600); // تأخير بسيط لتجميع التعديلات المتتالية بدل إرسال كل حرف لوحده
+        }
+
+        function setSyncConfig() {
+            const cfg = getSyncConfig() || { firebaseConfig: '', syncCode: '' };
+            const cfgText = cfg.firebaseConfig ? JSON.stringify(cfg.firebaseConfig, null, 2) : '';
+            showModal('إعداد المزامنة السحابية (Firebase)', `
+                <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                    1. أنشئ مشروع Firebase مجاني من firebase.google.com (اتبع ملف التعليمات المرفق).<br>
+                    2. الصق بيانات الإعداد (Firebase Config) بالكامل هنا.<br>
+                    3. اختر "كود مزامنة" (أي كلمة سرية من عندك) واستخدم نفس الكود بالظبط على كل أجهزتك.
+                </p>
+                <label class="block text-xs font-bold mb-1">Firebase Config (JSON)</label>
+                <textarea id="sync-config-input" rows="6" class="w-full font-mono text-xs mb-3" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}'>${cfgText}</textarea>
+                <label class="block text-xs font-bold mb-1">كود المزامنة (نفس الكود على كل الأجهزة)</label>
+                <input type="text" id="sync-code-input" class="w-full font-mono text-sm" value="${cfg.syncCode || ''}" placeholder="مثال: ibrahim-planner-2026">
+            `, () => {
+                const configRaw = document.getElementById('sync-config-input').value.trim();
+                const syncCode = document.getElementById('sync-code-input').value.trim();
+                if(!configRaw || !syncCode) {
+                    localStorage.removeItem('sync_config_v1');
+                    closeModal();
+                    updateSyncStatusBtn('off');
+                    alertModal('تم', 'تم إيقاف المزامنة السحابية.');
+                    return;
+                }
+                let parsed;
+                try {
+                    parsed = JSON.parse(configRaw);
+                } catch(e1) {
+                    // نحاول قراءتها كـ كائن جافاسكريبت عادي (زي ما فايربيس بيديه بالظبط، بمفاتيح بدون علامات تنصيص)
+                    try {
+                        let cleaned = configRaw.trim();
+                        const startIdx = cleaned.indexOf('{');
+                        const endIdx = cleaned.lastIndexOf('}');
+                        if(startIdx !== -1 && endIdx !== -1) cleaned = cleaned.slice(startIdx, endIdx + 1);
+                        parsed = Function('"use strict"; return (' + cleaned + ')')();
+                    } catch(e2) {
+                        alertModal('خطأ', 'بيانات الإعداد (Config) غير صحيحة. الصق الجزء اللي بين { و } بس، زي ما هو منسوخ من Firebase.');
+                        return;
+                    }
+                }
+                localStorage.setItem('sync_config_v1', JSON.stringify({ firebaseConfig: parsed, syncCode }));
+                closeModal();
+                initSync();
+                alertModal('تم بنجاح', 'تم تفعيل المزامنة! افتح نفس الإعداد (نفس الكود) على أي جهاز تاني وهيتزامن البيانات تلقائيًا.');
+            }, 'حفظ وتفعيل');
+        }
+
+        function changeTimeContext() {
+            currentYear = parseInt(document.getElementById('select-year').value);
+            currentMonth = parseInt(document.getElementById('select-month').value);
+            document.getElementById('year-indicator').innerText = currentYear;
+            renderHierarchy();
+            updateDashboard();
+        }
+
+        // --- Advanced Progress Tracking (Green/Red Logic) ---
+        function getProductiveDaysSet() {
+            const productive = new Set();
+            state.goals.forEach(g => {
+                g.weeks.forEach(w => {
+                    w.days.forEach(d => {
+                        if (d.tasks.some(t => t.done)) productive.add(`${g.year}-${g.month}-${d.dateNum}`);
+                    });
+                });
+            });
+            return productive;
+        }
+
+        function calculateAdvancedProgress(type, refYear = currentYear, refMonth = currentMonth) {
+            const productiveDaysSet = getProductiveDaysSet();
+            let totalDays = 0, passedDays = 0, productiveCount = 0;
+            let startD, endD;
+
+            const todayDate = new Date();
+            todayDate.setHours(0,0,0,0);
+
+            if (type === 'year') {
+                startD = new Date(refYear, 0, 1);
+                endD = new Date(refYear, 11, 31);
+            } else if (type === 'month') {
+                startD = new Date(refYear, refMonth, 1);
+                endD = new Date(refYear, refMonth + 1, 0); 
+            } else if (type === 'week') {
+                startD = new Date();
+                startD.setHours(0,0,0,0);
+                const dayOffset = (startD.getDay() + 1) % 7; 
+                startD.setDate(startD.getDate() - dayOffset);
+                endD = new Date(startD);
+                endD.setDate(startD.getDate() + 6);
+            }
+
+            totalDays = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+            
+            for (let i = 0; i < totalDays; i++) {
+                const currentLoopDate = new Date(startD);
+                currentLoopDate.setDate(startD.getDate() + i);
+                
+                if (currentLoopDate <= todayDate) {
+                    passedDays++;
+                    const y = currentLoopDate.getFullYear();
+                    const m = currentLoopDate.getMonth();
+                    const dNum = currentLoopDate.getDate();
+                    if (productiveDaysSet.has(`${y}-${m}-${dNum}`)) productiveCount++;
+                }
+            }
+
+            const wastedCount = passedDays - productiveCount;
+            
+            return {
+                greenPerc: totalDays ? Math.round((productiveCount / totalDays) * 100) : 0,
+                redPerc: totalDays ? Math.round((wastedCount / totalDays) * 100) : 0
+            };
+        }
+
+        function updateDashboard() {
+            const weekProg = calculateAdvancedProgress('week');
+            const monthProg = calculateAdvancedProgress('month');
+            const yearProg = calculateAdvancedProgress('year');
+
+            document.getElementById('prog-week-green-text').innerText = weekProg.greenPerc + '%';
+            document.getElementById('prog-week-red-text').innerText = weekProg.redPerc + '%';
+            document.getElementById('prog-week-green-bar').style.width = weekProg.greenPerc + '%';
+            document.getElementById('prog-week-red-bar').style.width = weekProg.redPerc + '%';
+
+            document.getElementById('prog-month-green-text').innerText = monthProg.greenPerc + '%';
+            document.getElementById('prog-month-red-text').innerText = monthProg.redPerc + '%';
+            document.getElementById('prog-month-green-bar').style.width = monthProg.greenPerc + '%';
+            document.getElementById('prog-month-red-bar').style.width = monthProg.redPerc + '%';
+
+            document.getElementById('prog-year-green-text').innerText = yearProg.greenPerc + '%';
+            document.getElementById('prog-year-red-text').innerText = yearProg.redPerc + '%';
+            document.getElementById('prog-year-green-bar').style.width = yearProg.greenPerc + '%';
+            document.getElementById('prog-year-red-bar').style.width = yearProg.redPerc + '%';
+
+            let hTotal = state.habits.length * new Date(currentYear, currentMonth + 1, 0).getDate();
+            let hDone = 0;
+            state.habits.forEach(h => hDone += h.days.length);
+            document.getElementById('prog-habits-text').innerText = (hTotal ? Math.round((hDone/hTotal)*100) : 0) + '%';
+        }
+
+        function formatTime12h(timeStr) {
+            if (!timeStr) return "";
+            let [hours, minutes] = timeStr.split(':');
+            let ampm = hours >= 12 ? 'م' : 'ص';
+            hours = hours % 12;
+            hours = hours ? hours : 12; 
+            return `${hours}:${minutes} ${ampm}`;
+        }
+
+        // --- Timeline Generation & Data Management ---
+        function generateMonthWeeks(year, month) {
+            const weeks = [];
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            
+            const isCurrentMonth = (year === realYear && month === realMonth);
+            const startDay = isCurrentMonth ? now.getDate() : 1;
+
+            let currentWeek = { id: 'w_'+Date.now()+Math.random(), title: 'الأسبوع 1', days: [] };
+            let weekNum = 1;
+
+            for (let i = startDay; i <= daysInMonth; i++) {
+                let d = new Date(year, month, i);
+                let dayName = dayNames[d.getDay()];
+                
+                currentWeek.days.push({ 
+                    dateNum: i, 
+                    name: dayName, 
+                    tasks: [] 
+                });
+
+                if (d.getDay() === 5 || i === daysInMonth) {
+                    weeks.push(currentWeek);
+                    if (i < daysInMonth) {
+                        weekNum++;
+                        currentWeek = { id: 'w_'+Date.now()+Math.random(), title: `الأسبوع ${weekNum}`, days: [] };
+                    }
+                }
+            }
+            return weeks;
+        }
+
+        function addGoal() {
+            showModal('إضافة مشروع جديد', `
+                <label class="block text-sm font-bold mb-2">اسم المشروع / الهدف (للشهر المحدد)</label>
+                <input type="text" id="goal-title-input" class="w-full" placeholder="مثال: تعلم البرمجة، إنهاء التقرير...">
+            `, () => {
+                const title = document.getElementById('goal-title-input').value.trim();
+                if(!title) return;
+                
+                state.goals.push({
+                    id: 'g_' + Date.now(),
+                    year: currentYear,
+                    month: currentMonth,
+                    title: title,
+                    weeks: generateMonthWeeks(currentYear, currentMonth)
+                });
+                
+                closeModal();
+                save();
+                renderHierarchy();
+            });
+        }
+
+        function deleteGoal(goalId) {
+            showModal('تأكيد الحذف', `هل أنت متأكد من حذف هذا المشروع بجميع مهامه؟ لا يمكن التراجع عن هذا الإجراء.`, () => {
+                state.goals = state.goals.filter(g => g.id !== goalId);
+                closeModal();
+                save();
+                renderHierarchy();
+            }, 'نعم، احذف');
+        }
+
+        function addTask(goalId, weekId, dateNum) {
+            showModal('إضافة مهمة جديدة', `
+                <label class="block text-sm font-bold mb-2">عنوان المهمة</label>
+                <input type="text" id="task-title-input" class="w-full mb-4" placeholder="ما الذي تود إنجازه؟">
+                <label class="block text-sm font-bold mb-2">الوقت (اختياري)</label>
+                <input type="time" id="task-time-input" class="w-full text-slate-700">
+            `, () => {
+                const title = document.getElementById('task-title-input').value.trim();
+                const time = document.getElementById('task-time-input').value;
+                if(!title) return;
+
+                const goal = state.goals.find(g => g.id === goalId);
+                const week = goal.weeks.find(w => w.id === weekId);
+                const day = week.days.find(d => d.dateNum === dateNum);
+
+                day.tasks.push({
+                    id: 't_' + Date.now() + Math.random(),
+                    title: title,
+                    time: time,
+                    done: false
+                });
+
+                closeModal();
+                save();
+                renderHierarchy();
+            });
+        }
+
+        function toggleTask(goalId, weekId, dateNum, taskId) {
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            const task = day.tasks.find(t => t.id === taskId);
+            task.done = !task.done;
+            if(task.done) {
+                playUiSound('success');
+                const row = document.getElementById('task-row-' + taskId);
+                if(row) row.classList.add('task-complete-pop');
+            }
+            save();
+            renderHierarchy(); // Re-render to update strikethrough classes
+        }
+
+        // --- منبهات حقيقية على مستوى النظام (تعمل حتى لو التطبيق مقفول تمامًا) ---
+        // بتشتغل فقط لما التطبيق يبقى نسخة أندرويد حقيقية (مبني بواسطة Capacitor)، وإلا بترجع فورًا من غير أي تأثير
+        function isNativeApp() {
+            return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        }
+        function hashIdToInt(str) {
+            let hash = 0;
+            for(let i = 0; i < str.length; i++) { hash = (hash << 5) - hash + str.charCodeAt(i); hash |= 0; }
+            return Math.abs(hash) % 2147483647;
+        }
+        async function scheduleNativeAlarm(goal, task) {
+            if(!isNativeApp()) return;
+            try {
+                const LN = window.Capacitor.Plugins.LocalNotifications;
+                const notifId = hashIdToInt(task.id);
+                await LN.cancel({ notifications: [{ id: notifId }] }).catch(() => {});
+                if(!task.alarm || !task.alarm.enabled) return;
+                const perm = await LN.checkPermissions();
+                if(perm.display !== 'granted') {
+                    const req = await LN.requestPermissions();
+                    if(req.display !== 'granted') return;
+                }
+                const [hh, mm] = task.alarm.time.split(':').map(Number);
+                let scheduleOpts;
+                if(task.alarm.repeat) {
+                    scheduleOpts = { on: { hour: hh, minute: mm }, allowWhileIdle: true };
+                } else {
+                    const d = new Date();
+                    d.setHours(hh, mm, 0, 0);
+                    if(d.getTime() <= Date.now()) d.setDate(d.getDate() + 1);
+                    scheduleOpts = { at: d, allowWhileIdle: true };
+                }
+                await LN.schedule({
+                    notifications: [{
+                        id: notifId,
+                        title: '⏰ تذكير: ' + task.title,
+                        body: goal.title,
+                        schedule: scheduleOpts,
+                        smallIcon: 'ic_launcher'
+                    }]
+                });
+            } catch(e) { console.error('native alarm schedule error', e); }
+        }
+        async function cancelNativeAlarm(taskId) {
+            if(!isNativeApp()) return;
+            try {
+                const LN = window.Capacitor.Plugins.LocalNotifications;
+                await LN.cancel({ notifications: [{ id: hashIdToInt(taskId) }] });
+            } catch(e) {}
+        }
+        // إعادة جدولة كل المنبهات المفعّلة عند فتح التطبيق (تحسبًا لأي تحديث حصل والتطبيق كان مقفول)
+        function rescheduleAllNativeAlarms() {
+            if(!isNativeApp()) return;
+            state.goals.forEach(goal => goal.weeks.forEach(week => week.days.forEach(day => {
+                day.tasks.forEach(task => { if(task.alarm && task.alarm.enabled) scheduleNativeAlarm(goal, task); });
+            })));
+        }
+
+        function deleteTask(goalId, weekId, dateNum, taskId) {
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            day.tasks = day.tasks.filter(t => t.id !== taskId);
+            playUiSound('delete');
+            cancelNativeAlarm(taskId);
+            save();
+            renderHierarchy();
+        }
+
+        // --- قائمة الثلاث نقاط لكل مهمة (منبه / حذف) ---
+        function closeTaskMenu() {
+            const existing = document.getElementById('task-dropdown-menu');
+            if(existing) existing.remove();
+            document.removeEventListener('click', closeTaskMenuOnOutsideClick, true);
+        }
+        function closeTaskMenuOnOutsideClick(e) {
+            const menu = document.getElementById('task-dropdown-menu');
+            if(menu && !menu.contains(e.target)) closeTaskMenu();
+        }
+
+        function toggleTaskMenu(event, goalId, weekId, dateNum, taskId) {
+            event.stopPropagation();
+            const already = document.getElementById('task-dropdown-menu');
+            closeTaskMenu();
+            if(already) return; // كانت مفتوحة بالفعل وتم إغلاقها بس فوق
+
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            const task = day.tasks.find(t => t.id === taskId);
+
+            const menu = document.createElement('div');
+            menu.id = 'task-dropdown-menu';
+            const hasAlarm = task.alarm && task.alarm.enabled;
+            menu.innerHTML = `
+                <button onclick="closeTaskMenu(); openAlarmModal('${goalId}','${weekId}', ${dateNum}, '${taskId}')">${hasAlarm ? '✏️ تعديل المنبه' : '🔔 تفعيل منبه'}</button>
+                ${hasAlarm ? `<button onclick="closeTaskMenu(); removeAlarm('${goalId}','${weekId}', ${dateNum}, '${taskId}')">🔕 إلغاء المنبه</button>` : ''}
+                <button onclick="closeTaskMenu(); deleteTask('${goalId}','${weekId}', ${dateNum}, '${taskId}')" class="!text-red-500">🗑️ حذف المهمة</button>
+            `;
+            document.body.appendChild(menu);
+            const rect = event.currentTarget.getBoundingClientRect();
+            const menuWidth = 175;
+            let left = rect.left - menuWidth + rect.width;
+            if(left < 8) left = 8;
+            let top = rect.bottom + 4;
+            if(top + 110 > window.innerHeight) top = rect.top - 114;
+            menu.style.left = left + 'px';
+            menu.style.top = top + 'px';
+            setTimeout(() => document.addEventListener('click', closeTaskMenuOnOutsideClick, true), 0);
+        }
+
+        function removeAlarm(goalId, weekId, dateNum, taskId) {
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            const task = day.tasks.find(t => t.id === taskId);
+            task.alarm = { enabled: false };
+            cancelNativeAlarm(taskId);
+            save();
+            renderHierarchy();
+        }
+
+        // --- منبهات المهام (تنبيه صوتي + إشعار متصفح) ---
+        const ALARM_SOUND_LABELS = {
+            chime: '🎐 جرس رقيق',
+            bell: '🔔 جرس كلاسيكي',
+            digital: '⏱️ رقمي',
+            soft: '🎵 نغمة ناعمة'
+        };
+
+        function openAlarmModal(goalId, weekId, dateNum, taskId) {
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            const task = day.tasks.find(t => t.id === taskId);
+            const alarm = task.alarm && task.alarm.enabled ? task.alarm : { time: task.time || '09:00', sound: 'chime', repeat: false };
+
+            const soundOptions = Object.entries(ALARM_SOUND_LABELS).map(([key, label]) =>
+                `<option value="${key}" ${alarm.sound === key ? 'selected' : ''}>${label}</option>`
+            ).join('');
+
+            showModal('🔔 إعداد منبه للمهمة', `
+                <p class="text-xs text-slate-500 mb-3">المهمة: <strong>${task.title}</strong></p>
+                <label class="block text-sm font-bold mb-1">وقت المنبه</label>
+                <input type="time" id="alarm-time-input" value="${alarm.time}" class="mb-3">
+
+                <label class="block text-sm font-bold mb-1">نغمة التنبيه</label>
+                <div class="flex gap-2 items-center mb-3">
+                    <select id="alarm-sound-input" class="flex-1">${soundOptions}</select>
+                    <button type="button" onclick="playAlarmSound(document.getElementById('alarm-sound-input').value, 1)" class="bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg text-sm" title="تجربة النغمة">🔊 تجربة</button>
+                </div>
+
+                <label class="flex items-center gap-2 text-sm mb-1 cursor-pointer">
+                    <input type="checkbox" id="alarm-repeat-input" ${alarm.repeat ? 'checked' : ''} class="w-4 h-4">
+                    تكرار المنبه يوميًا
+                </label>
+            `, () => {
+                const time = document.getElementById('alarm-time-input').value;
+                const sound = document.getElementById('alarm-sound-input').value;
+                const repeat = document.getElementById('alarm-repeat-input').checked;
+                if(!time) { alertModal('تنبيه', 'اختر وقت المنبه أولاً.'); return; }
+                task.alarm = { enabled: true, time, sound, repeat, lastFiredKey: null };
+                closeModal();
+                save();
+                renderHierarchy();
+                playUiSound('success');
+                scheduleNativeAlarm(goal, task);
+                if('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+            }, 'حفظ المنبه');
+        }
+
+        // --- محرك الأصوات (Web Audio API — بدون ملفات خارجية) ---
+        let audioCtx = null;
+        function getAudioCtx() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            return audioCtx;
+        }
+        function playTone(freq, duration, type = 'sine', vol = 0.15, delay = 0) {
+            try {
+                const ctx = getAudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type; osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, ctx.currentTime + delay);
+                gain.gain.exponentialRampToValueAtTime(vol, ctx.currentTime + delay + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + duration);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + delay);
+                osc.stop(ctx.currentTime + delay + duration + 0.05);
+            } catch(e) {}
+        }
+
+        const ALARM_SOUND_FN = {
+            chime: () => { playTone(880, 0.25, 'sine', 0.2, 0); playTone(1108, 0.3, 'sine', 0.18, 0.15); playTone(1318, 0.4, 'sine', 0.16, 0.3); },
+            bell: () => { playTone(660, 0.6, 'triangle', 0.22, 0); playTone(990, 0.5, 'triangle', 0.15, 0.12); },
+            digital: () => { for(let i = 0; i < 4; i++) playTone(1000, 0.09, 'square', 0.12, i * 0.15); },
+            soft: () => { playTone(523, 0.4, 'sine', 0.13, 0); playTone(659, 0.4, 'sine', 0.1, 0.2); }
+        };
+
+        let alarmSoundTimers = [];
+        function playAlarmSound(soundKey, repeatTimes = 3) {
+            const fn = ALARM_SOUND_FN[soundKey] || ALARM_SOUND_FN.chime;
+            for(let i = 0; i < repeatTimes; i++) {
+                alarmSoundTimers.push(setTimeout(fn, i * 900));
+            }
+        }
+        function stopAlarmSound() {
+            alarmSoundTimers.forEach(t => clearTimeout(t));
+            alarmSoundTimers = [];
+        }
+
+        // أصوات واجهة خفيفة لتفاعلات المستخدم (نقر، نجاح، حذف)
+        function playUiSound(kind) {
+            if(kind === 'click') playTone(700, 0.06, 'sine', 0.05, 0);
+            else if(kind === 'success') { playTone(880, 0.1, 'sine', 0.08, 0); playTone(1180, 0.14, 'sine', 0.07, 0.08); }
+            else if(kind === 'delete') playTone(320, 0.12, 'sine', 0.06, 0);
+        }
+
+        // --- محرك فحص المنبهات (كل 15 ثانية أثناء فتح التطبيق) ---
+        function checkAlarms() {
+            if(isNativeApp()) return; // في نسخة أندرويد الحقيقية، الجدولة بتتم على مستوى النظام مباشرة
+            const nowD = new Date();
+            const y = nowD.getFullYear(), m = nowD.getMonth(), d = nowD.getDate();
+            const hh = String(nowD.getHours()).padStart(2, '0');
+            const mm = String(nowD.getMinutes()).padStart(2, '0');
+            const nowKey = `${y}-${m}-${d} ${hh}:${mm}`;
+            let needsSave = false;
+
+            state.goals.forEach(goal => {
+                if(goal.year !== y || goal.month !== m) return;
+                goal.weeks.forEach(week => week.days.forEach(day => {
+                    if(day.dateNum !== d) return;
+                    day.tasks.forEach(task => {
+                        if(!task.alarm || !task.alarm.enabled || !task.alarm.time) return;
+                        if(task.alarm.time === `${hh}:${mm}` && task.alarm.lastFiredKey !== nowKey) {
+                            task.alarm.lastFiredKey = nowKey;
+                            if(!task.alarm.repeat) task.alarm.enabled = false;
+                            needsSave = true;
+                            triggerAlarm(goal, task, () => {
+                                task.alarm.enabled = true;
+                                const snoozeD = new Date(Date.now() + 5 * 60000);
+                                task.alarm.time = String(snoozeD.getHours()).padStart(2, '0') + ':' + String(snoozeD.getMinutes()).padStart(2, '0');
+                                task.alarm.lastFiredKey = null;
+                                save();
+                                renderHierarchy();
+                            });
+                        }
+                    });
+                }));
+            });
+            if(needsSave) { save(); renderHierarchy(); }
+        }
+        setInterval(checkAlarms, 15000);
+
+        function triggerAlarm(goal, task, onSnooze) {
+            playAlarmSound(task.alarm.sound, 4);
+            showAlarmBanner(goal.title, task.title, onSnooze);
+            if('Notification' in window && Notification.permission === 'granted') {
+                const opts = { body: goal.title, icon: 'icon-192.png', tag: task.id, vibrate: [200, 100, 200] };
+                if(navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+                    navigator.serviceWorker.getRegistration().then(reg => {
+                        if(reg) reg.showNotification('⏰ تذكير: ' + task.title, opts);
+                        else new Notification('⏰ تذكير: ' + task.title, opts);
+                    }).catch(() => new Notification('⏰ تذكير: ' + task.title, opts));
+                } else {
+                    try { new Notification('⏰ تذكير: ' + task.title, opts); } catch(e) {}
+                }
+            }
+        }
+
+        function showAlarmBanner(goalTitle, taskTitle, onSnooze) {
+            const container = document.getElementById('alarm-banner-container');
+            container.innerHTML = `
+                <div id="alarm-banner">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">⏰</span>
+                            <div>
+                                <div class="font-bold text-sm">حان وقت: ${taskTitle}</div>
+                                <div class="text-xs opacity-90">${goalTitle}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button id="alarm-dismiss-btn" class="flex-1 bg-white/20 hover:bg-white/30 rounded-lg py-2 text-sm font-bold">تم ✅</button>
+                        <button id="alarm-snooze-btn" class="flex-1 bg-white/20 hover:bg-white/30 rounded-lg py-2 text-sm font-bold">تأجيل 5 دقائق 💤</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('alarm-dismiss-btn').onclick = () => { stopAlarmSound(); container.innerHTML = ''; };
+            document.getElementById('alarm-snooze-btn').onclick = () => { stopAlarmSound(); container.innerHTML = ''; if(onSnooze) onSnooze(); };
+        }
+
+        function copyTasks(goalId, weekId, dateNum, btn) {
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+            clipboardTasks = JSON.parse(JSON.stringify(day.tasks)); // deep copy
+
+            // Visual feedback
+            const originalText = btn.innerText;
+            btn.innerText = '✅';
+            setTimeout(() => btn.innerText = originalText, 1000);
+        }
+
+        function pasteTasks(goalId, weekId, dateNum, btn) {
+            if(clipboardTasks.length === 0) {
+                alertModal('تنبيه', 'لا توجد مهام منسوخة في الحافظة.');
+                return;
+            }
+            const goal = state.goals.find(g => g.id === goalId);
+            const week = goal.weeks.find(w => w.id === weekId);
+            const day = week.days.find(d => d.dateNum === dateNum);
+
+            clipboardTasks.forEach(task => {
+                const newTask = { ...task, id: 't_' + Date.now() + Math.random(), done: false };
+                day.tasks.push(newTask);
+            });
+
+            // Visual feedback
+            const originalText = btn.innerText;
+            btn.innerText = '✅';
+            setTimeout(() => {
+                btn.innerText = originalText;
+                save();
+                renderHierarchy();
+            }, 500);
+        }
+
+        // --- Render Views ---
+        function renderHierarchy() {
+            const container = document.getElementById('hierarchy-tree');
+            const filtered = state.goals.filter(g => g.year === currentYear && g.month === currentMonth);
+            
+            if(filtered.length === 0) {
+                container.innerHTML = `<div class="text-center p-20 glass-card text-slate-400">لا مشاريع في هذا الشهر. انقر على 'إضافة مشروع' ليتم توليد المخطط الزمني تلقائياً.</div>`;
+                return;
+            }
+            
+            container.innerHTML = filtered.map((goal) => `
+                <div class="glass-card p-6 border-r-8 border-emerald-500 mb-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold">${goal.title}</h2>
+                        <button onclick="deleteGoal('${goal.id}')" class="btn-delete text-sm font-bold">حذف المشروع</button>
+                    </div>
+                    <div class="space-y-6">
+                        ${goal.weeks.map((week) => `
+                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <h3 class="font-bold text-emerald-600 text-sm mb-3">${week.title}</h3>
+                                <div class="flex gap-4 overflow-x-auto timeline-scroll pb-3 pt-2 px-1">
+                                    ${week.days.map((day) => {
+                                        /* التحقق مما إذا كان هذا اليوم هو اليوم الحالي الفعلي */
+                                        const isToday = (currentYear === realYear && currentMonth === realMonth && day.dateNum === now.getDate());
+                                        
+                                        return `
+                                        <div class="bg-white p-3 rounded-lg border min-w-[220px] flex-shrink-0 shadow-sm relative group ${isToday ? 'active-day-glow border-transparent' : 'border-slate-200'}">
+                                            <div class="flex justify-between items-center border-b border-slate-100 pb-2 mb-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="${isToday ? 'bg-emerald-500 text-white shadow-sm' : 'bg-emerald-100 text-emerald-700'} font-bold px-2 py-0.5 rounded text-sm">
+                                                        ${isToday ? '🔴 اليوم ' : ''}${day.dateNum} / ${goal.month + 1}
+                                                    </span>
+                                                    <span class="text-xs font-bold text-slate-500">${day.name}</span>
+                                                </div>
+                                                <div class="flex gap-1">
+                                                    <button onclick="copyTasks('${goal.id}','${week.id}', ${day.dateNum}, this)" class="text-slate-400 hover:text-blue-500 text-xs transition" title="نسخ مهام اليوم">📋</button>
+                                                    <button onclick="pasteTasks('${goal.id}','${week.id}', ${day.dateNum}, this)" class="text-slate-400 hover:text-emerald-500 text-xs transition" title="لصق المهام">📥</button>
+                                                    <button onclick="addTask('${goal.id}','${week.id}', ${day.dateNum})" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 px-2 py-0.5 rounded text-xs font-bold ml-1" title="إضافة مهمة جديدة">+</button>
+                                                </div>
+                                            </div>
+                                            <div class="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                                                ${day.tasks.length === 0 ? '<p class="text-[10px] text-slate-300 text-center py-4">لا توجد مهام</p>' : ''}
+                                                ${day.tasks.map((task) => `
+                                                    <div class="task-item flex flex-col gap-1 text-[11px] p-2 bg-slate-50 relative group" id="task-row-${task.id}">
+                                                        <div class="flex items-start gap-2 pr-5">
+                                                            <input type="checkbox" class="absolute right-2 top-2.5 w-3 h-3 text-emerald-600 rounded border-slate-300 cursor-pointer" ${task.done ? 'checked' : ''} onchange="toggleTask('${goal.id}','${week.id}', ${day.dateNum}, '${task.id}')">
+                                                            <span class="${task.done ? 'line-through text-slate-400' : 'text-slate-700'} font-medium leading-tight mr-2">${task.title}</span>
+                                                            <div class="absolute left-1 top-1 flex items-center gap-1">
+                                                                ${task.alarm && task.alarm.enabled ? '<span class="alarm-badge text-[10px]" title="منبه مفعّل">🔔</span>' : ''}
+                                                                <button onclick="toggleTaskMenu(event, '${goal.id}','${week.id}', ${day.dateNum}, '${task.id}')" class="task-menu-btn text-sm font-bold" title="خيارات المهمة">⋮</button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-1 mr-6">
+                                                            ${task.time ? `<span class="text-[9px] text-blue-500 font-bold bg-blue-50 w-fit px-1 rounded">${formatTime12h(task.time)}</span>` : ''}
+                                                            ${task.alarm && task.alarm.enabled ? `<span class="text-[9px] text-emerald-600 font-bold bg-emerald-50 w-fit px-1 rounded">⏰ ${formatTime12h(task.alarm.time)}${task.alarm.repeat ? ' يوميًا' : ''}</span>` : ''}
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    `}).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- Habits Management ---
+        function addHabit() {
+            showModal('إضافة عادة جديدة', `
+                <label class="block text-sm font-bold mb-2">اسم العادة</label>
+                <input type="text" id="habit-name-input" class="w-full" placeholder="مثال: القراءة 20 دقيقة، شرب الماء...">
+            `, () => {
+                const name = document.getElementById('habit-name-input').value.trim();
+                if(!name) return;
+                state.habits.push({ id: 'h_' + Date.now(), name: name, days: [] });
+                closeModal();
+                save();
+                renderHabits();
+            });
+        }
+
+        function toggleHabit(habitId, dayNum) {
+            const habit = state.habits.find(h => h.id === habitId);
+            if(habit.days.includes(dayNum)) {
+                habit.days = habit.days.filter(d => d !== dayNum);
+            } else {
+                habit.days.push(dayNum);
+            }
+            save();
+            renderHabits();
+        }
+
+        function deleteHabit(habitId) {
+            showModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذه العادة؟', () => {
+                state.habits = state.habits.filter(h => h.id !== habitId);
+                closeModal();
+                save();
+                renderHabits();
+            }, 'حذف');
+        }
+
+        function renderHabits() {
+            const tbody = document.getElementById('habits-body');
+            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+            if (state.habits.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="33" class="text-center p-10 text-slate-400">لا توجد عادات مضافة. ابدأ بإضافة عادة جديدة لتتبعها.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = state.habits.map(habit => `
+                <tr class="border-b hover:bg-slate-50 transition">
+                    <td class="p-3 border sticky right-0 bg-white z-10 font-bold text-slate-700 whitespace-nowrap text-right">${habit.name}</td>
+                    ${Array.from({length: 31}, (_, i) => {
+                        const dayNum = i + 1;
+                        const isValidDay = dayNum <= daysInMonth;
+                        const isChecked = habit.days.includes(dayNum);
+                        return `<td class="p-1 border ${!isValidDay ? 'bg-slate-100' : ''}">
+                            ${isValidDay ? `<input type="checkbox" class="w-4 h-4 text-purple-600 rounded cursor-pointer" ${isChecked ? 'checked' : ''} onchange="toggleHabit('${habit.id}', ${dayNum})">` : ''}
+                        </td>`;
+                    }).join('')}
+                    <td class="p-3 border text-center">
+                        <button onclick="deleteHabit('${habit.id}')" class="text-red-400 hover:text-red-600 font-bold text-sm">×</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- Archive Render ---
+        function renderArchive() {
+            const container = document.getElementById('archive-list');
+            if(state.archive.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center p-10 glass-card text-slate-400">لا توجد سجلات مؤرشفة بعد. تتم الأرشفة تلقائياً بنهاية كل شهر وسنة.</div>`;
+                return;
+            }
+
+            container.innerHTML = state.archive.map(item => `
+                <div class="glass-card p-5 archive-item flex flex-col justify-between border-t-4 border-slate-700">
+                    <div>
+                        <h4 class="text-lg font-bold text-slate-800">${item.label}</h4>
+                        <p class="text-xs text-slate-500 mt-1">تاريخ الحفظ: ${new Date(item.timestamp).toLocaleDateString('ar-EG')}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+                        <span class="text-sm font-bold text-slate-600">نسبة الإنجاز:</span>
+                        <span class="text-xl font-bold ${item.score >= 50 ? 'text-emerald-600' : 'text-orange-500'}">${item.score}%</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
